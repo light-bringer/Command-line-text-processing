@@ -215,6 +215,7 @@ $ printf 'hi👍 how are you?' | awk -v FS= '{print $3}'
 * [gawk manual - Field Splitting Summary](https://www.gnu.org/software/gawk/manual/html_node/Field-Splitting-Summary.html#Field-Splitting-Summary)
 * [stackoverflow - explanation on default FS](https://stackoverflow.com/questions/30405694/default-field-separator-for-awk)
 * [unix.stackexchange - filter lines if it contains a particular character only once](https://unix.stackexchange.com/questions/362550/how-to-remove-line-if-it-contains-a-character-exactly-once)
+* [stackoverflow - Processing 2 files with different field separators](https://stackoverflow.com/questions/24516141/awk-processing-2-files-with-different-field-separators)
 
 <br>
 
@@ -1110,7 +1111,11 @@ $ printf '' | awk '{sum += $1} END{print sum}'
 $ # so either add '0' or use unary '+' operator to convert to number
 $ printf '' | awk '{sum += $1} END{print +sum}'
 0
+$ awk '{sum += $1} END{print sum+0}' /dev/null
+0
 ```
+
+* See also [unix.stackexchange - change in behavior of unary + with gawk version 4.2.0](https://unix.stackexchange.com/questions/421904/regression-with-unary-plus)
 
 <br>
 
@@ -1350,6 +1355,12 @@ $ awk 'FNR==1{s1=s2=0} /foo/{s1=1} /report/{s2=1} s1&&s2{print FILENAME; nextfil
 paths.txt
 ```
 
+**Further Reading**
+
+* [stackoverflow - delete line based on content of previous/next lines](https://stackoverflow.com/questions/49112877/delete-line-if-line-matches-foo-line-above-matches-bar-and-line-below-match)
+* [softwareengineering - FSM examples](https://softwareengineering.stackexchange.com/questions/47806/examples-of-finite-state-machines)
+* [wikipedia - FSM](https://en.wikipedia.org/wiki/Finite-state_machine)
+
 <br>
 
 ## <a name="two-file-processing"></a>Two file processing
@@ -1502,13 +1513,16 @@ ECE     Om      92
 
 #### <a name="getline"></a>getline
 
-* If entire line (instead of fields) from one file is needed to change the other file, using `getline` would be faster
+* `getline` is an alternative way to read from a file and could be faster than `NR==FNR` method for some cases
 * But use it with caution
     * [gawk manual - getline](https://www.gnu.org/software/gawk/manual/html_node/Getline.html) for details, especially about corner cases, errors, etc
+    * [getline caveats](https://web.archive.org/web/20170524214527/http://awk.freeshell.org/AllAboutGetline)
     * [gawk manual - Closing Input and Output Redirections](https://www.gnu.org/software/gawk/manual/html_node/Close-Files-And-Pipes.html) if you have to start from beginning of file again
+* `getline` return value: `1` if record is found, `0` if end of file, `-1` for errors such as file not found (use `ERRNO` variable to get details)
 
 ```bash
 $ # replace mth line in poem.txt with nth line from nums.txt
+$ # return value handling is not shown here, but should be done ideally
 $ awk -v m=3 -v n=2 'BEGIN{while(n-- > 0) getline s < "nums.txt"}
                      FNR==m{$0=s} 1' poem.txt
 Roses are red,
@@ -1523,13 +1537,18 @@ Roses are red,
 Violets are blue,
 -2
 And so are you.
+
+$ # Note that if nums.txt has less than n lines:
+$ # getline version will use last line of nums.txt if any
+$ # NR==FNR version will give empty string as 's' would be uninitialized
 ```
 
-* Another use case is if two files are to be processed exactly for same line numbers
+* Another use case is if two files are to be processed simultaneously
 
 ```bash
 $ # print line from fruits.txt if corresponding line from nums.txt is +ve number
-$ awk -v file='nums.txt' '{getline num < file; if(num>0) print}' fruits.txt
+$ # the return value check ensures corresponding line number comparison
+$ awk -v file='nums.txt' '(getline num < file)==1 && num>0' fruits.txt
 fruit   qty
 banana  31
 
@@ -1537,6 +1556,18 @@ $ # without getline, but has to save entire file in array
 $ awk 'NR==FNR{n[FNR]=$0; next} n[FNR]>0' nums.txt fruits.txt
 fruit   qty
 banana  31
+```
+
+* error handling
+
+```bash
+$ awk 'NR==FNR{n[FNR]=$0; next} n[FNR]>0' xyz.txt fruits.txt
+awk: fatal: cannot open file 'xyz.txt' for reading (No such file or directory)
+
+$ awk -v file='xyz.txt' '{ e=(getline num < file);
+                           if(e<0){print file ": " ERRNO; exit} }
+                         e==1 && num>0' fruits.txt
+xyz.txt: No such file or directory
 ```
 
 **Further Reading**
@@ -1971,7 +2002,7 @@ a
 BEGIN
 b
 END
-;as;s;sd;
+xyzabc
 
 $ awk '/BEGIN/{f=1; buf=$0; next}
        f{buf=buf ORS $0}
@@ -2437,6 +2468,8 @@ $ awk 'BEGIN{s="solve: 5 % x = 1"; printf "%s\n", s}'
 solve: 5 % x = 1
 ```
 
+* See also [stackoverflow - concatenating columns in middle](https://stackoverflow.com/questions/49135518/linux-csv-file-concatenate-columns-into-one-column)
+
 <br>
 
 #### <a name="redirecting-print-output"></a>Redirecting print output
@@ -2538,7 +2571,7 @@ bar foo
 789 123
 ```
 
-* relying on default intial value
+* relying on default initial value
 
 ```bash
 $ # step 1 - works for single file

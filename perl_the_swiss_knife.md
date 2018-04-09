@@ -33,6 +33,7 @@
     * [Comparing specific fields](#comparing-specific-fields)
     * [Line number matching](#line-number-matching)
 * [Creating new fields](#creating-new-fields)
+* [Multiple file input](#multiple-file-input)
 * [Dealing with duplicates](#dealing-with-duplicates)
 * [Lines between two REGEXPs](#lines-between-two-regexps)
     * [All unbroken blocks](#all-unbroken-blocks)
@@ -46,6 +47,7 @@
     * [split](#split)
     * [Fixed width processing](#fixed-width-processing)
     * [String and file replication](#string-and-file-replication)
+    * [transliteration](#transliteration)
     * [Executing external commands](#executing-external-commands)
 * [Further Reading](#further-reading)
 
@@ -439,7 +441,8 @@ $ seq 14 25 | perl -ne 'print if $.>=10'
 
 * `-a` option will auto-split each input record based on one or more continuous white-space, similar to default behavior in `awk`
     * See also [split](#split) section
-* Special variable array `@F` will contain all the elements, index starting from `0`
+* Special variable array `@F` will contain all the elements, indexing starts from 0
+    * negative indexing is also supported, `-1` gives last element, `-2` gives last-but-one and so on
     * see [Array operations](#array-operations) section for examples on array usage
 
 ```bash
@@ -450,7 +453,7 @@ banana  31
 fig     90
 guava   6
 
-$ # print only first field, index starting from 0
+$ # print only first field, indexing starts from 0
 $ # same as: awk '{print $1}' fruits.txt 
 $ perl -lane 'print $F[0]' fruits.txt
 fruit
@@ -528,6 +531,7 @@ fig     90
 #### <a name="specifying-different-input-field-separator"></a>Specifying different input field separator
 
 * by using `-F` command line option
+    * See also [split](#split) section, which covers details about trailing empty fields
 
 ```bash
 $ # second field where input field separator is :
@@ -832,8 +836,8 @@ $ # print first record
 $ perl -lne 'BEGIN{$/="Error:"} print if $.==1' report.log
 blah blah
 
-$ # same as: awk -F'\n' -v RS='Error:' '/surely/{print RS $0}' report.log
-$ perl -F'\n' -lane 'BEGIN{$/="Error:"} print "$/$_" if /surely/' report.log
+$ # same as: awk -v RS='Error:' '/surely/{print RS $0}' report.log
+$ perl -lne 'BEGIN{$/="Error:"} print "$/$_" if /surely/' report.log
 Error: something surely went wrong
 some text
 some more text
@@ -881,6 +885,11 @@ $ seq 3 | perl -ne 'BEGIN{$\="\n"} print'
 
 3
 
+$ seq 2 | perl -ne 'BEGIN{$\="---\n"} print'
+1
+---
+2
+---
 ```
 
 * dynamically changing output record separator
@@ -892,6 +901,7 @@ $ seq 6 | perl -lpe '$\ = $.%2 ? " " : "\n"'
 1 2
 3 4
 5 6
+
 $ # -l also sets the output record separator
 $ # but gets overridden by $\
 $ seq 6 | perl -lpe '$\ = $.%3 ? "-" : "\n"'
@@ -934,7 +944,7 @@ And so are you.
 
 $ # match two consecutive lines
 $ # same as: awk 'p~/are/ && /is/{print p ORS $0} {p=$0}' poem.txt
-$ perl -ne 'print "$p$_" if /is/ && $p=~/are/; $p=$_' poem.txt
+$ perl -ne 'print $p,$_ if /is/ && $p=~/are/; $p=$_' poem.txt
 Violets are blue,
 Sugar is sweet,
 $ # if only the second line is needed, same as: awk 'p~/are/ && /is/; {p=$0}'
@@ -1009,6 +1019,7 @@ a
 **Further Reading**
 
 * [stackoverflow - multiline find and replace](https://stackoverflow.com/questions/39884112/perl-multiline-find-and-replace-with-regex)
+* [stackoverflow - delete line based on content of previous/next lines](https://stackoverflow.com/questions/49112877/delete-line-if-line-matches-foo-line-above-matches-bar-and-line-below-match)
 * [softwareengineering - FSM examples](https://softwareengineering.stackexchange.com/questions/47806/examples-of-finite-state-machines)
 * [wikipedia - FSM](https://en.wikipedia.org/wiki/Finite-state_machine)
 
@@ -1093,14 +1104,14 @@ Execution of -e aborted due to compilation errors.
 $ # e modifier covered later, allows Perl code in replacement section
 $ echo 'foo:123:bar:baz' | perl -pe '$c=0; s/:/++$c==2 ? "-" : $&/ge'
 foo:123-bar:baz
-$ # or use non-greedy and lookbehind(covered later), same as: sed 's/and/-/3'
+$ # or use non-greedy and \K(covered later), same as: sed 's/and/-/3'
 $ echo 'foo and bar and baz land good' | perl -pe 's/(and.*?){2}\Kand/-/'
 foo and bar and baz l- good
 
 $ # emulating GNU sed's number+g modifier
 $ a='456:foo:123:bar:789:baz
 x:y:z:a:v:xc:gf'
-$ echo "$a" | sed -E 's/:/-/3g'
+$ echo "$a" | sed 's/:/-/3g'
 456:foo:123-bar-789-baz
 x:y:z-a-v-xc-gf
 $ echo "$a" | perl -pe '$c=0; s/:/++$c<3 ? $& : "-"/ge'
@@ -1157,7 +1168,7 @@ a walking for a cause
 #### <a name="backslash-sequences"></a>Backslash sequences
 
 * `\d` for `[0-9]`
-* `\s` for `[ \t\r\n\f]`
+* `\s` for `[ \t\r\n\f\v]`
 * `\h` for `[ \t]`
 * `\n` for newline character
 * `\D`, `\S`, `\H`, `\N` respectively for their opposites
@@ -1184,7 +1195,7 @@ a b c
 
 * adding a `?` to `?` or `*` or `+` or `{}` quantifiers will change matching from greedy to non-greedy. In other words, to match as minimally as possible
     * also known as lazy quantifier
-* See also [regular-expressions.info - Possessive Quantifiers](http://www.regular-expressions.info/possessive.html)
+* See also [regular-expressions.info - Possessive Quantifiers](https://www.regular-expressions.info/possessive.html)
 
 ```bash
 $ # greedy matching
@@ -1284,7 +1295,7 @@ $ echo 'foo _foo 1foo' | perl -pe 's/(?<!_)foo/baz/g'
 baz _foo 1baz
 
 $ # join each line in paragraph by replacing newline character
-$ # expect the one at end of paragraph
+$ # except the one at end of paragraph
 $ perl -00 -pe 's/\n(?!$)/. /g' sample.txt
 Hello World
 
@@ -1297,9 +1308,8 @@ Today is sunny. Not a bit funny. No doubt you like it too
 Much ado about nothing. He he he
 ```
 
-* variable lookbehind with `\K`
-* useful when positive lookbehind is not a constant length of characters to look up
-    * for ex: quantifiers that can match different number of characters
+* `\K` helps as a workaround for some of the variable-length lookbehind cases
+* See also [stackoverflow - Variable-length lookbehind-assertion alternatives](https://stackoverflow.com/questions/11640447/variable-length-lookbehind-assertion-alternatives-for-regular-expressions)
 
 ```bash
 $ # lookbehind is checking start of line (0 characters) and comma(1 character)
@@ -1391,7 +1401,7 @@ $ perl -pe '/^-/ ? s/// : s/^/-/' nums.txt
 **Further Reading**
 
 * [perldoc - Special Backtracking Control Verbs](https://perldoc.perl.org/perlre.html#Special-Backtracking-Control-Verbs)
-* [rexegg - Excluding Unwanted Matches](http://www.rexegg.com/backtracking-control-verbs.html#skipfail)
+* [rexegg - Excluding Unwanted Matches](https://www.rexegg.com/backtracking-control-verbs.html#skipfail)
 
 <br>
 
@@ -1403,8 +1413,8 @@ $ perl -pe '/^-/ ? s/// : s/^/-/' nums.txt
 ```bash
 $ s='baz 2008-03-24 and 2012-08-12 foo 2016-03-25'
 $ # (?1) refers to first capture group (\d{4}-\d{2}-\d{2})
-$ echo "$s" | perl -pe 's/(\d{4}-\d{2}-\d{2}) and (?1)//'
-baz  foo 2016-03-25
+$ echo "$s" | perl -pe 's/(\d{4}-\d{2}-\d{2}) and (?1)/XYZ/'
+baz XYZ foo 2016-03-25
 
 $ # using \1 won't work as the two dates are different
 $ echo "$s" | perl -pe 's/(\d{4}-\d{2}-\d{2}) and \1//'
@@ -1413,7 +1423,7 @@ baz 2008-03-24 and 2012-08-12 foo 2016-03-25
 
 * use `(?:` to group regular expressions without capturing it, so this won't be counted for backreference
 * See also
-    * [stackoverflow - what is non-capturing group](https://stackoverflow.com/questions/3512471/what-is-a-non-capturing-group-what-does-a-question-mark-followed-by-a-colon)
+    * [stackoverflow - what is non-capturing group](https://stackoverflow.com/questions/3512471/what-is-a-non-capturing-group-what-does-do)
     * [stackoverflow - extract specific fields and key-value pairs](https://stackoverflow.com/questions/46632397/parse-vcf-files-info-field)
 
 ```bash
@@ -1459,8 +1469,8 @@ foo,bar|123|x,y,z|42
 **Further Reading**
 
 * [perldoc - Extended Patterns](https://perldoc.perl.org/perlre.html#Extended-Patterns)
-* [rexegg - all the (? usages](http://www.rexegg.com/regex-disambiguation.html)
-* [regular-expressions - recursion](http://www.regular-expressions.info/recurse.html#balanced)
+* [rexegg - all the (? usages](https://www.rexegg.com/regex-disambiguation.html)
+* [regular-expressions - recursion](https://www.regular-expressions.info/recurse.html#balanced)
 
 <br>
 
@@ -1678,6 +1688,7 @@ foo 123 baz
     * similar to `-o` option for GNU awk
 
 ```bash
+$ # command being deparsed is discussed in a later section
 $ perl -MO=Deparse -ne 'if(!$#ARGV){$h{$_}=1; next}
             print if $h{$_}' colors_1.txt colors_2.txt
 LINE: while (defined($_ = <ARGV>)) {
@@ -1764,12 +1775,14 @@ White
 
 ```bash
 $ # common lines
+$ # note that all duplicates matching in second file would get printed
 $ # same as: grep -Fxf colors_1.txt colors_2.txt
 $ # same as: awk 'NR==FNR{a[$0]; next} $0 in a' colors_1.txt colors_2.txt
 $ perl -ne 'if(!$#ARGV){$h{$_}=1; next}
             print if $h{$_}' colors_1.txt colors_2.txt
 Blue
 Red
+$ # can also use: perl -ne '!$#ARGV ? $h{$_}=1 : $h{$_} && print'
 
 $ # lines from colors_2.txt not present in colors_1.txt
 $ # same as: grep -vFxf colors_1.txt colors_2.txt
@@ -1915,6 +1928,7 @@ ECE     Om      92
 
 ```bash
 $ # replace mth line in poem.txt with nth line from nums.txt
+$ # assumes that there are at least n lines in nums.txt
 $ # same as: awk -v m=3 -v n=2 'BEGIN{while(n-- > 0) getline s < "nums.txt"}
 $ #                             FNR==m{$0=s} 1' poem.txt
 $ m=3 n=2 perl -pe 'BEGIN{ $s=<> while $ENV{n}-- > 0; close ARGV}
@@ -1925,13 +1939,8 @@ Violets are blue,
 And so are you.
 
 $ # print line from fruits.txt if corresponding line from nums.txt is +ve number
-$ # same as: awk -v file='nums.txt' '{getline num < file; if(num>0) print}'
-$ file='nums.txt' perl -ne 'BEGIN{open($f,$ENV{file})}
-                            $num=<$f>; print if $num>0' fruits.txt
-fruit   qty
-banana  31
-$ # or pass contents of nums.txt as standard input
-$ <nums.txt perl -ne '$num=<STDIN>; print if $num>0' fruits.txt
+$ # same as: awk -v file='nums.txt' '(getline num < file)==1 && num>0'
+$ <nums.txt perl -ne 'print if <STDIN> > 0' fruits.txt
 fruit   qty
 banana  31
 ```
@@ -2005,6 +2014,46 @@ CSE     Surya   81
 EEE     Tia     59      placement_rep
 ECE     Om      92
 CSE     Amy     67      sports_rep
+```
+
+<br>
+
+## <a name="multiple-file-input"></a>Multiple file input
+
+* there is no gawk's `FNR/BEGINFILE/ENDFILE` equivalent in perl, but it can be worked around
+
+```bash
+$ # same as: awk 'FNR==2' poem.txt greeting.txt 
+$ # close ARGV will reset $. to 0
+$ perl -ne 'print if $.==2; close ARGV if eof' poem.txt greeting.txt
+Violets are blue,
+Have a safe journey
+
+$ # same as: awk 'BEGINFILE{print "file: "FILENAME} ENDFILE{print $0"\n------"}'
+$ perl -lne 'print "file: $ARGV" if $.==1;
+             print "$_\n------" and close ARGV if eof' poem.txt greeting.txt
+file: poem.txt
+And so are you.
+------
+file: greeting.txt
+Have a safe journey
+------
+```
+
+* workaround for gawk's `nextfile`
+* to skip remaining lines from current file being processed and move on to next file
+
+```bash
+$ # same as: head -q -n1 and awk 'FNR>1{nextfile} 1'
+$ perl -pe 'close ARGV if $.>=1' poem.txt greeting.txt fruits.txt
+Roses are red,
+Hello there
+fruit   qty
+
+$ # same as: awk 'tolower($1) ~ /red/{print FILENAME; nextfile}' *
+$ perl -lane 'print $ARGV and close ARGV if $F[0] =~ /red/i' *
+colors_1.txt
+colors_2.txt
 ```
 
 <br>
@@ -2288,9 +2337,10 @@ $ seq 30 | b=2 perl -ne '$f=1, $c++ if /4/;
 26
 ```
 
-* extract block only if matches another string as well
+* extract block only if it matches another string as well
 
 ```bash
+$ # string to match inside block: 23
 $ perl -ne 'if(/BEGIN/){$f=1; $m=0; $b=""}; $m=1 if $f && /23/;
             $b.=$_ if $f; if(/END/){print $b if $m; $f=0}' range.txt 
 BEGIN
@@ -2298,6 +2348,7 @@ BEGIN
 6789
 END
 
+$ # line to match inside block: 5 or 25
 $ seq 30 | perl -ne 'if(/4/){$f=1; $m=0; $b=""}; $m=1 if $f && /^(5|25)$/;
                      $b.=$_ if $f; if(/6/){print $b if $m; $f=0}'
 4
@@ -2358,7 +2409,7 @@ a
 BEGIN
 b
 END
-;as;s;sd;
+xyzabc
 ```
 
 then use buffers to accumulate the records and print accordingly
@@ -2638,7 +2689,7 @@ $ echo "$s" | perl -lane 'print join ":",sort {length $a <=> length $b} @F'
 to:bat:four:floor:dubious
 ```
 
-* sorting based on header
+* sorting columns based on header
 
 ```bash
 $ # need to get indexes of order required for header, then use it for all lines
@@ -2669,6 +2720,8 @@ Amy     67      CSE
 
 * [perldoc - How do I sort a hash (optionally by value instead of key)?](https://perldoc.perl.org/perlfaq4.html#How-do-I-sort-a-hash-(optionally-by-value-instead-of-key)%3f)
 * [stackoverflow - sort the keys of a hash by value](https://stackoverflow.com/questions/10901084/how-to-sort-perl-hash-on-values-and-order-the-keys-correspondingly-in-two-array)
+* [stackoverflow - sort only from 2nd field, ignore header](https://stackoverflow.com/questions/48920626/sort-rows-in-csv-file-without-header-first-column)
+* [stackoverflow - sort based on group of lines](https://stackoverflow.com/questions/48925359/sorting-groups-of-lines)
 
 <br>
 
@@ -2705,9 +2758,9 @@ $ seq 5 | perl -e '@lines=<>; print @lines[3,1,0,2,4]'
 ```bash
 $ echo '23 756 -983 5' | perl -lane 'print join " ", map {$_*$_} @F'
 529 571536 966289 25
-$ echo 'a b c' | perl -lane 'print join ",", map {"\"$_\""} @F'
+$ echo 'a b c' | perl -lane 'print join ",", map {qq/"$_"/} @F'
 "a","b","c"
-$ echo 'a b c' | perl -lane 'print join ",", map {uc "\"$_\""} @F'
+$ echo 'a b c' | perl -lane 'print join ",", map {uc qq/"$_"/} @F'
 "A","B","C"
 
 $ # changing the array itself
@@ -2787,6 +2840,9 @@ $ echo 'a 1 b 2 c' | perl -lane 'print $F[2]'
 b
 $ echo 'a 1 b 2 c' | perl -lne '@x=split; print $x[2]'
 b
+$ # temp variable can be avoided by using list context
+$ echo 'a 1 b 2 c' | perl -lne 'print join ":", (split)[2,-1]'
+b:c
 
 $ # using digits as separator
 $ echo 'a 1 b 2 c' | perl -lne '@x=split /\d+/; print ":$x[1]:"'
@@ -2800,10 +2856,28 @@ $ echo 'a 1 b 2 c' | perl -F'/\h+/,$_,2' -lane 'print "$F[0]:$F[1]:"'
 a:1 b 2 c:
 ```
 
+* by default, trailing empty fields are stripped
+* specify a negative value to preserve trailing empty fields
+
+```bash
+$ echo ':123::' | perl -lne 'print scalar split /:/'
+2
+$ echo ':123::' | perl -lne 'print scalar split /:/,$_,-1'
+4
+
+$ echo ':123::' | perl -F: -lane 'print scalar @F'
+2
+$ echo ':123::' | perl -F'/:/,$_,-1' -lane 'print scalar @F'
+4
+```
+
 * to save the separators as well, use capture groups
 
 ```bash
 $ echo 'a 1 b 2 c' | perl -lne '@x=split /(\d+)/; print "$x[1],$x[3]"'
+1,2
+$ # or, without the temp variable
+$ echo 'a 1 b 2 c' | perl -lne 'print join ",", (split /(\d+)/)[1,3]'
 1,2
 
 $ # same can be done for -F option
@@ -2916,10 +2990,10 @@ $ perl -0777 -ne 'print $_ x 100' poem.txt | wc -c
 ```bash
 $ # typical use case
 $ # same as: echo *.log
-$ perl -le '@x=glob q/*.log/; print "@x"'
+$ perl -le 'print join " ", glob q/*.log/'
 report.log
 $ # same as: echo *.{log,pl}
-$ perl -le '@x=glob q/*.{log,pl}/; print "@x"'
+$ perl -le 'print join " ", glob q/*.{log,pl}/'
 report.log code.pl sub_sq.pl
 
 $ # hacking
@@ -2929,6 +3003,97 @@ $ perl -le '@x=glob q/{1,3}{a,b}/; print "@x"'
 $ # same as: echo {1,3}{1,3}{1,3}
 $ perl -le '@x=glob "{1,3}" x 3; print "@x"'
 111 113 131 133 311 313 331 333
+```
+
+<br>
+
+#### <a name="transliteration"></a>transliteration
+
+* See `tr` under [perldoc - Quote-Like Operators](https://perldoc.perl.org/perlop.html#Quote-Like-Operators) section for details
+* similar to substitution, by default `tr` acts on `$_` variable and modifies it unless `r` modifier is specified
+* however, characters `$` and `@` are treated as literals - i.e no interpolation
+* similar to `sed`, one can also use `y` instead of `tr`
+
+```bash
+$ # one-to-one mapping of characters, all occurrences are translated
+$ echo 'foo bar cat baz' | perl -pe 'tr/abc/123/'
+foo 21r 31t 21z
+
+$ # use - to represent a range in ascending order
+$ echo 'Hello World' | perl -pe 'tr/a-zA-Z/n-za-mN-ZA-M/'
+Uryyb Jbeyq
+$ echo 'Uryyb Jbeyq' | perl -pe 'tr|a-zA-Z|n-za-mN-ZA-M|'
+Hello World
+```
+
+* if arguments are of different lengths
+
+```bash
+$ # when second argument is longer, the extra characters are ignored
+$ echo 'foo bar cat baz' | perl -pe 'tr/abc/1-9/'
+foo 21r 31t 21z
+
+$ # when first argument is longer
+$ # the last character of second argument gets padded to make it equal
+$ echo 'foo bar cat baz' | perl -pe 'tr/a-z/123/'
+333 213 313 213
+```
+
+* modifiers
+
+```bash
+$ # no padding, absent mappings are deleted
+$ echo 'fob bar cat baz' | perl -pe 'tr/a-z/123/d'
+2 21 31 21
+$ echo 'Hello:123:World' | perl -pe 'tr/a-z//d'
+H:123:W
+
+$ # c modifier complements first argument characters
+$ echo 'Hello:123:World' | perl -lpe 'tr/a-z//cd'
+elloorld
+
+$ # s modifier to keep only one copy of repeated characters
+$ echo 'FFoo seed 11233' | perl -pe 'tr/a-z//s'
+FFo sed 11233
+$ # when replacement is done as well, only replaced characters are squeezed
+$ # unlike 'tr -s' which squeezes characters specified by second argument
+$ echo 'FFoo seed 11233' | perl -pe 'tr/A-Z/a-z/s'
+foo seed 11233
+
+$ perl -e '$x="food"; $y=$x=~tr/a-z/A-Z/r; print "x=$x\ny=$y\n"'
+x=food
+y=FOOD
+```
+
+* since `-` is used for character ranges, place it at the start/end to represent it literally
+* similarly, to represent `\` literally, use `\\`
+
+```bash
+$ echo '/foo-bar/baz/report' | perl -pe 'tr/-a-z/_A-Z/'
+/FOO_BAR/BAZ/REPORT
+
+$ echo '/foo-bar/baz/report' | perl -pe 'tr|/-|\\_|'
+\foo_bar\baz\report
+```
+
+* return value is number of replacements made
+
+```bash
+$ echo 'Hello there. How are you?' | grep -o '[a-z]' | wc -l
+17
+
+$ echo 'Hello there. How are you?' | perl -lne 'print tr/a-z//'
+17
+```
+
+* unicode examples
+
+```bash
+$ echo 'hello!' | perl -CS -pe 'tr/a-z/\x{1d5ee}-\x{1d607}/'
+𝗵𝗲𝗹𝗹𝗼!
+
+$ echo 'How are you?' | perl -Mopen=locale -Mutf8 -pe 'tr/a-zA-Z/𝗮-𝘇𝗔-𝗭/'
+𝗛𝗼𝘄 𝗮𝗿𝗲 𝘆𝗼𝘂?
 ```
 
 <br>
@@ -2962,6 +3127,9 @@ I bought two bananas and three mangoes
 * see [perldoc - system](https://perldoc.perl.org/functions/system.html) for details
 
 ```bash
+$ perl -le '$es=system q/ls poem.txt/; print "$es"'
+poem.txt
+0
 $ perl -le 'system q/ls poem.txt/; print "exit status: $?"'
 poem.txt
 exit status: 0
